@@ -5,6 +5,11 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("WordPress Posts");
   const [totalTags, setTotalTags] = useState({});
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalPosts, setTotalPosts] = useState(0); // Total Posts Count
+  const [remainingPosts, setRemainingPosts] = useState(0); // Remaining Posts Count
+  const [currentPage, setCurrentPage] = useState(1);
+  const perPage = 100; // Posts per page
 
   useEffect(() => {
     // Fetch Site Title
@@ -17,30 +22,38 @@ export default function Home() {
         console.error("Error fetching site title:", error);
       }
     };
-
     fetchTitle();
   }, []);
 
   useEffect(() => {
-    // Fetch All Posts
+    // Fetch Posts and Count Tags
     const fetchPosts = async () => {
       try {
+        setLoading(true);
         const response = await fetch(
-          "https://inc42.com/wp-json/wp/v2/posts?per_page=100"
+          `https://inc42.com/wp-json/wp/v2/posts?per_page=${perPage}&page=${currentPage}`
         );
+
+        const totalCount = response.headers.get("X-WP-Total"); // Total Posts Count
+        const totalPostsCount = totalCount ? parseInt(totalCount) : 0;
+        setTotalPosts(totalPostsCount); // Store total post count
+        setRemainingPosts(totalPostsCount - posts.length); // Initial Remaining Posts
+
+        const totalPagesCount = Math.ceil(totalPostsCount / perPage); // Total Pages
+        setTotalPages(totalPagesCount);
+
         const data = await response.json();
-        setPosts(data);
+        setPosts((prevPosts) => [...prevPosts, ...data]); // Append new posts
+        setRemainingPosts((prevRemaining) => prevRemaining - data.length); // Decrease Remaining Posts
 
         // Count Only Used HTML Tags
         let tagCount = {};
-
         data.forEach((post) => {
           const tempDiv = document.createElement("div");
           tempDiv.innerHTML = post.content.rendered; // Parse HTML from content
 
           // List of tags to check
           const tagsToCheck = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "ul", "li", "strong", "em"];
-
           tagsToCheck.forEach((tag) => {
             const count = tempDiv.getElementsByTagName(tag).length;
             if (count > 0) {
@@ -49,7 +62,13 @@ export default function Home() {
           });
         });
 
-        setTotalTags(tagCount);
+        setTotalTags((prevTags) => {
+          let updatedTags = { ...prevTags };
+          Object.entries(tagCount).forEach(([tag, count]) => {
+            updatedTags[tag] = (updatedTags[tag] || 0) + count;
+          });
+          return updatedTags;
+        });
       } catch (error) {
         console.error("Error fetching posts:", error);
       } finally {
@@ -58,14 +77,13 @@ export default function Home() {
     };
 
     fetchPosts();
-  }, []);
-
-  if (loading) return <div>Loading...</div>;
+  }, [currentPage]); // Runs when `currentPage` changes
 
   return (
     <div>
       <h1>{title}</h1>
-      <p>Total Posts: {posts.length}</p>
+      <p>Total Posts: {totalPosts}</p>
+      <p>Remaining Posts: {remainingPosts}</p>
 
       {/* Total Tags Section */}
       <h2>Total Tags Used:</h2>
@@ -77,6 +95,7 @@ export default function Home() {
         ))}
       </ul>
 
+      {/* Posts List */}
       <ul>
         {posts.map((post) => (
           <li key={post.id}>
@@ -87,6 +106,13 @@ export default function Home() {
           </li>
         ))}
       </ul>
+
+      {/* Load More Button */}
+      {currentPage < totalPages && (
+        <button onClick={() => setCurrentPage((prev) => prev + 1)}>
+          Load More (Remaining: {remainingPosts})
+        </button>
+      )}
     </div>
   );
 }
