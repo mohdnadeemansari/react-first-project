@@ -3,9 +3,8 @@ import React, { useEffect, useState } from "react";
 export default function Home() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [title, setTitle] = useState("WordPress Posts"); // Default Title
-  const [page, setPage] = useState(1); // Current Page Number
-  const [hasMore, setHasMore] = useState(true); // Check if More Posts Exist
+  const [title, setTitle] = useState("WordPress Posts");
+  const [totalTags, setTotalTags] = useState({});
 
   useEffect(() => {
     // Fetch Site Title
@@ -23,23 +22,34 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Fetch Posts (Pagination Included)
+    // Fetch All Posts
     const fetchPosts = async () => {
       try {
         const response = await fetch(
-          `https://inc42.com/wp-json/wp/v2/posts?per_page=20&page=${page}`
+          "https://inc42.com/wp-json/wp/v2/posts?per_page=100"
         );
         const data = await response.json();
+        setPosts(data);
 
-        if (data.length > 0) {
-          if (page === 1) {
-            setPosts(data); // First page overwrite
-          } else {
-            setPosts((prevPosts) => [...prevPosts, ...data]); // Append new posts
-          }
-        } else {
-          setHasMore(false); // No More Posts Available
-        }
+        // Count Only Used HTML Tags
+        let tagCount = {};
+
+        data.forEach((post) => {
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = post.content.rendered; // Parse HTML from content
+
+          // List of tags to check
+          const tagsToCheck = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "ul", "li", "strong", "em"];
+
+          tagsToCheck.forEach((tag) => {
+            const count = tempDiv.getElementsByTagName(tag).length;
+            if (count > 0) {
+              tagCount[tag] = (tagCount[tag] || 0) + count; // Only store non-zero tags
+            }
+          });
+        });
+
+        setTotalTags(tagCount);
       } catch (error) {
         console.error("Error fetching posts:", error);
       } finally {
@@ -48,13 +58,25 @@ export default function Home() {
     };
 
     fetchPosts();
-  }, [page]); // Runs on page change
+  }, []);
 
   if (loading) return <div>Loading...</div>;
 
   return (
     <div>
-      <h1>{title}</h1> {/* Dynamic Site Title */}
+      <h1>{title}</h1>
+      <p>Total Posts: {posts.length}</p>
+
+      {/* Total Tags Section */}
+      <h2>Total Tags Used:</h2>
+      <ul>
+        {Object.entries(totalTags).map(([tag, count]) => (
+          <li key={tag}>
+            {tag.toUpperCase()}: {count}
+          </li>
+        ))}
+      </ul>
+
       <ul>
         {posts.map((post) => (
           <li key={post.id}>
@@ -65,11 +87,6 @@ export default function Home() {
           </li>
         ))}
       </ul>
-
-      {/* Load More Button */}
-      {hasMore && (
-        <button onClick={() => setPage(page + 1)}>Load More</button>
-      )}
     </div>
   );
 }
